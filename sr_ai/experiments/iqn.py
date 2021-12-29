@@ -21,7 +21,7 @@ if __name__ == "__main__":
     from sr_gym import SRGym, Connection
     from sr_gym.ipc import DEFAULT_PIPE_NAME, MAX_MESSAGE_SIZE
     from sr_gym.env.transformers import (
-        SimpleStateTransformer, DiscreteActionTransformer,
+        TupleStateTransformer, DiscreteActionTransformer,
         VelocityRewardTransformer, LapTerminalTransformer
     )
 
@@ -243,7 +243,7 @@ if __name__ == "__main__":
     env_builder = compose(
         env_builder,
         partial(
-            SRGym, state_transformer=SimpleStateTransformer(),
+            SRGym, state_transformer=TupleStateTransformer(),
             action_transformer=DiscreteActionTransformer(),
             reward_transformer=VelocityRewardTransformer(),
             terminal_transformer=LapTerminalTransformer()
