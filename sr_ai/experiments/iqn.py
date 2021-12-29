@@ -249,6 +249,7 @@ if __name__ == "__main__":
             terminal_transformer=LapTerminalTransformer()
         )
     )
+    env_builder = compose(env_builder, GymEnv)
     env = env_builder()
 
     # The algorithm logger
