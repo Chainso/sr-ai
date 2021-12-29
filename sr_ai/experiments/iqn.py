@@ -9,6 +9,7 @@ if __name__ == "__main__":
     import torch.nn as nn
     import torch.multiprocessing as mp
     import yaml
+    import numpy as np
     from hlrl.core.logger import TensorboardLogger
     from hlrl.core.common.functional import compose
     from hlrl.torch.trainers import OffPolicyTrainer
@@ -236,6 +237,11 @@ if __name__ == "__main__":
     # Initialize the environment
     args.vectorized = False
 
+    state_transformer = TupleStateTransformer()
+    action_transformer = DiscreteActionTransformer()
+    reward_transformer = VelocityRewardTransformer()
+    terminal_transformer = LapTerminalTransformer()
+
     env_builder = partial(
         Connection.create_named_pipe_connection, DEFAULT_PIPE_NAME,
         MAX_MESSAGE_SIZE
@@ -243,14 +249,16 @@ if __name__ == "__main__":
     env_builder = compose(
         env_builder,
         partial(
-            SRGym, state_transformer=TupleStateTransformer(),
-            action_transformer=DiscreteActionTransformer(),
-            reward_transformer=VelocityRewardTransformer(),
-            terminal_transformer=LapTerminalTransformer()
+            SRGym, state_transformer=state_transformer,
+            action_transformer=action_transformer,
+            reward_transformer=reward_transformer,
+            terminal_transformer=terminal_transformer
         )
     )
     env_builder = compose(env_builder, GymEnv)
-    env = env_builder()
+
+    state_size = np.sum(state_transformer.state_space().shape)
+    action_size = np.sum(action_transformer.action_space().shape)
 
     # The algorithm logger
     algo_logger = (
@@ -267,10 +275,10 @@ if __name__ == "__main__":
         autoencoder_out_n = args.hidden_size
     else:
         qfunc_num_layers = 0
-        autoencoder_out_n = env.action_space[0]
+        autoencoder_out_n = action_size
 
     qfunc = LinearPolicy(
-        args.hidden_size, env.action_space[0], args.hidden_size,
+        args.hidden_size, action_size, args.hidden_size,
         qfunc_num_layers, activation_fn
     )
 
@@ -278,7 +286,7 @@ if __name__ == "__main__":
         num_lin_before = 1 if args.num_layers > 2 else 0
 
         autoencoder = LSTMPolicy(
-            env.state_space[0], autoencoder_out_n, args.hidden_size,
+            state_size, autoencoder_out_n, args.hidden_size,
             num_lin_before, args.hidden_size, max(args.num_layers - 2, 1), 0, 0,
             activation_fn
         )
@@ -293,7 +301,7 @@ if __name__ == "__main__":
         algo = TorchRecurrentAlgo(algo, args.burn_in_length, args.n_steps)
     else:
         autoencoder = LinearPolicy(
-            env.state_space[0], autoencoder_out_n, args.hidden_size,
+            state_size, autoencoder_out_n, args.hidden_size,
             min(args.num_layers - 1, 1), activation_fn
         )
 
@@ -309,16 +317,16 @@ if __name__ == "__main__":
 
     if args.exploration == "rnd":
         rnd_network = LinearPolicy(
-            env.state_space[0], args.hidden_size, args.hidden_size,
+            state_size, args.hidden_size, args.hidden_size,
             args.num_layers + 2, activation_fn
         )
 
         rnd_target = LinearPolicy(
-            env.state_space[0], args.hidden_size, args.hidden_size,
+            state_size, args.hidden_size, args.hidden_size,
             args.num_layers, activation_fn
         )
 
-        normalization_layer = nn.BatchNorm1d(env.state_space[0], affine=False)
+        normalization_layer = nn.BatchNorm1d(state_size, affine=False)
 
         algo = RND(algo, rnd_network, rnd_target, optim, normalization_layer)
 
